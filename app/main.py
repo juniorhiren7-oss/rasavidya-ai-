@@ -15,6 +15,7 @@ from app.schemas import (
     ClaimCreate, ClaimRead, EvidenceAssessmentCreate, EvidenceAssessmentRead,
     ResearchRunRead, ResearchRunRequest, SourceCreate, SourceRead,
 )
+from app.security import require_admin
 
 settings = get_settings()
 app = FastAPI(
@@ -27,7 +28,7 @@ app.add_middleware(
     allow_origins=settings.allowed_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["Content-Type", "Authorization", "X-Admin-Token"],
 )
 
 
@@ -51,7 +52,7 @@ def get_sources(limit: int = Query(default=100, ge=1, le=500), db: Session = Dep
     return list(db.scalars(select(ResearchSource).order_by(ResearchSource.created_at.desc()).limit(limit)))
 
 
-@app.post("/sources", response_model=SourceRead, status_code=201, tags=["research"])
+@app.post("/sources", response_model=SourceRead, status_code=201, tags=["research"], dependencies=[Depends(require_admin)])
 def create_source(payload: SourceCreate, db: Session = Depends(get_db)):
     source = ResearchSource(
         id=str(uuid4()), title=payload.title, authors=payload.authors,
@@ -69,7 +70,7 @@ def get_claims(limit: int = Query(default=100, ge=1, le=500), db: Session = Depe
     return list(db.scalars(select(HistoricalClaim).order_by(HistoricalClaim.created_at.desc()).limit(limit)))
 
 
-@app.post("/claims", response_model=ClaimRead, status_code=201, tags=["research"])
+@app.post("/claims", response_model=ClaimRead, status_code=201, tags=["research"], dependencies=[Depends(require_admin)])
 def create_claim(payload: ClaimCreate, db: Session = Depends(get_db)):
     if db.get(HistoricalClaim, payload.id):
         raise HTTPException(status_code=409, detail="Claim ID already exists")
@@ -90,7 +91,7 @@ def get_assessments(claim_id: str | None = None, db: Session = Depends(get_db)):
     return list(db.scalars(statement))
 
 
-@app.post("/assessments", response_model=EvidenceAssessmentRead, status_code=201, tags=["evidence"])
+@app.post("/assessments", response_model=EvidenceAssessmentRead, status_code=201, tags=["evidence"], dependencies=[Depends(require_admin)])
 def create_assessment(payload: EvidenceAssessmentCreate, db: Session = Depends(get_db)):
     if not db.get(HistoricalClaim, payload.claim_id):
         raise HTTPException(status_code=404, detail="Claim not found")
@@ -103,12 +104,12 @@ def create_assessment(payload: EvidenceAssessmentCreate, db: Session = Depends(g
     return assessment
 
 
-@app.get("/runs", response_model=list[ResearchRunRead], tags=["agents"])
+@app.get("/runs", response_model=list[ResearchRunRead], tags=["agents"], dependencies=[Depends(require_admin)])
 def get_runs(limit: int = Query(default=50, ge=1, le=200), db: Session = Depends(get_db)):
     return list(db.scalars(select(ResearchRun).order_by(ResearchRun.created_at.desc()).limit(limit)))
 
 
-@app.post("/runs", response_model=ResearchRunRead, status_code=202, tags=["agents"])
+@app.post("/runs", response_model=ResearchRunRead, status_code=200, tags=["agents"], dependencies=[Depends(require_admin)])
 def run_research(payload: ResearchRunRequest, db: Session = Depends(get_db)):
     agent = get_agent(payload.agent_id)
     if not agent:
@@ -143,7 +144,6 @@ def run_research(payload: ResearchRunRequest, db: Session = Depends(get_db)):
         run.status = "completed"
     except Exception as exc:
         run.status = "failed"
-        # Do not return environment details or secrets to the client.
         run.error = f"Research provider request failed ({type(exc).__name__})."
     run.completed_at = datetime.now(timezone.utc)
     db.commit()
