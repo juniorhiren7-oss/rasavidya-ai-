@@ -3,14 +3,17 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.database import Base, engine
+from app.security import require_admin
 
 
 @pytest.fixture()
 def client():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    app.dependency_overrides[require_admin] = lambda: "admin"
     with TestClient(app) as test_client:
         yield test_client
+    app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)
 
 
@@ -64,3 +67,21 @@ def test_transmutation_requires_separate_nuclear_evidence():
     }
     assert meets_transmutation_evidence_gate(base)
     assert not meets_transmutation_evidence_gate({**base, "nuclear_origin_evidence": "partial"})
+
+
+def test_admin_token_fails_closed_when_not_configured():
+    from fastapi import HTTPException
+    from app.security import validate_admin_token
+
+    with pytest.raises(HTTPException) as error:
+        validate_admin_token("anything", "")
+    assert error.value.status_code == 503
+
+
+def test_admin_token_rejects_wrong_value():
+    from fastapi import HTTPException
+    from app.security import validate_admin_token
+
+    with pytest.raises(HTTPException) as error:
+        validate_admin_token("wrong", "correct")
+    assert error.value.status_code == 401
