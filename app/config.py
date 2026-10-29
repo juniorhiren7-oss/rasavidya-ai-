@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./rasavidya.db"
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1-mini"
+    admin_api_token: str = ""
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
     max_research_task_chars: int = 4000
 
