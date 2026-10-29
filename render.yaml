@@ -1,0 +1,31 @@
+# Optional blueprint. Review the plans and costs in Render before applying.
+services:
+  - type: web
+    name: rasavidya-ai-api
+    runtime: python
+    plan: free
+    buildCommand: pip install .
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: rasavidya-ai-db
+          property: connectionString
+      - key: ADMIN_API_TOKEN
+        generateValue: true
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4.1-mini
+      - key: CORS_ORIGINS
+        sync: false
+      - key: MAX_RESEARCH_TASK_CHARS
+        value: "4000"
+databases:
+  - name: rasavidya-ai-db
+    plan: free
+    databaseName: rasavidya
+    user: rasavidya
